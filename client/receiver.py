@@ -1,13 +1,15 @@
 import sys
 import os
-PROTOBUF_PATH = os.path.abspath("../../titans-vision/client/python")
-sys.path.append(PROTOBUF_PATH)
+
+WRAPPER_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../titans-vision/client/python'))
+sys.path.append(WRAPPER_PATH)
+
+import wrapper_pb2 as wr
 import socket
 import struct
-import wrapper_pb2 as wr
 
 class VisionReceiver:
-    def __init__(self, group='224.5.23.2', port=10006, buffer_size=2048):
+    def __init__(self, group='224.5.23.2', port=10015, buffer_size=2048):
         self.group = group
         self.port = port
         self.buffer_size = buffer_size
@@ -23,10 +25,30 @@ class VisionReceiver:
         return sock
 
     def receive_packet(self):
-        data, addr = self.sock.recvfrom(self.buffer_size)
-        msg = wr.SSL_WrapperPacket()
-        msg.ParseFromString(data)
-        return msg
+        data = None
+        try:
+            data, _ = self.sock.recvfrom(self.buffer_size)
+        except Exception as e:
+            print(f"Erro ao receber dados: {e}")
+        
+        if data is not None:
+            try:
+                frame = wr.SSL_WrapperPacket().FromString(data)
+                
+                robots_blue = [(robot.robot_id, robot.x, robot.y, robot.orientation) for robot in frame.detection.robots_blue]
+                robots_yellow = [(robot.robot_id, robot.x, robot.y, robot.orientation) for robot in frame.detection.robots_yellow]
+                
+                balls = [(b.x, b.y, b.confidence) for b in frame.detection.balls]
+
+                return {
+                    "robots_blue": robots_blue,
+                    "robots_yellow": robots_yellow,
+                    "balls": balls
+                }
+
+            except Exception as e:
+                print(f"Erro ao processar o frame: {e}")
+        return None
 
     def run(self):
         while True:
